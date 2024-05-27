@@ -4,34 +4,42 @@
    #TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION in file license
 
 
-
 <?php
 
-
-#Funzione che restituisce i link della pagina dell' url di partenza
+#Copyright (C) <2023>  <Piermarcello Piazza>
+#Funzione che restituisce i link della pagina dell' url di partenza sia https che http
 #input:url della pagina di partenza e generico $link delle ancore dei links
 # restituisce l' array di links 
 function get_links($link,$url)
     {
+global $start_url;
 $ret = array();
-      if((parse_url($link, PHP_URL_HOST))==(parse_url($url, PHP_URL_HOST))){
+     if((parse_url($link, PHP_URL_HOST))==(parse_url($start_url, PHP_URL_HOST))){
         $dom = new DOMDocument();
-        $html=@file_get_contents($link);
+      //  $html=@file_get_contents($link);
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, $link);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+$html = curl_exec($ch);
+curl_close($ch);
         if($html!=''){
         #Use Dom Object
         @$dom->loadHTML($html);
         $dom->preserveWhiteSpace = false;
         $links = $dom->getElementsByTagName('a');
         foreach ($links as $tag){
-            $ret[$tag->getAttribute('href')] =$tag->getAttribute('href');
-        }
+ $ret[$tag->getAttribute('href')]=$tag->getAttribute('href');
+}
          
       }
-    } 
+
+    }
 
 
-     
-        return $ret;
+      return $ret;
+       
     }
 
 
@@ -46,7 +54,6 @@ function get_urls_from($url)
 global $host,$base,$scheme,$path;$newurl;  // vriabili globali che vengono richiamate nel programma 
 $link=array();//definizione dell' array contenente i link
 $arr_link=array();//definizione dell' array contenente i link dei link
-
 
 $link=get_links($url,$url);
 $get_url='';
@@ -77,7 +84,7 @@ if(!in_array($newurl,$link)){
 $link=get_links($newurl,$url);
 $arr_link=array_merge($arr_link,$link);
 }
-else  get_urls_from($newurl);
+//else  get_urls_from($newurl);
 }
 else if(($hosturl_=='')&&($pathurl_!='') )
 {$newurl=$scheme.'://'.parse_url($url, PHP_URL_HOST).'/'.$pathurl_.'?'.$queryurl_;
@@ -87,7 +94,7 @@ $link=get_links($newurl,$url);
 $arr_link=array_merge($arr_link,$link);
 
 }
-else  get_urls_from($newurl);
+//else  get_urls_from($newurl);
 }
 
 
@@ -99,12 +106,13 @@ else  get_urls_from($newurl);
 $link=get_links($url_,$url);
 $arr_link=array_merge($arr_link,$link);
 }
-else  get_urls_from($url_);
+//else 
+// get_urls_from($url_);
 
 
-  
+  }
 
-   }
+   
 
 
 
@@ -116,8 +124,31 @@ else  get_urls_from($url_);
 return $arr_link;
 
 }
+#function to realize the links in appropriated form 
+# so that :if in the link is missed the suffix http(or https)://hostname/pathhostname/ in the link
+# this function complete the full url or, delete it if the linkname of map is different from hostname.
+function get_final_urls($new_Arr)
+{
+global $start_url;
+foreach($new_Arr as $key=>$fnew_url)
+{
+#if in the link is missed the suffix http(or https)://hostname/pathhostname/ in the link
+# this function complete the full url
+if(((parse_url($fnew_url, PHP_URL_HOST)=="")||(parse_url($fnew_url, PHP_URL_HOST)=="#"))&&(parse_url($start_url, PHP_URL_HOST)!=parse_url($fnew_url, PHP_URL_HOST)))
+{
+#modify $fnew_url
 
+$new_url=parse_url($start_url, PHP_URL_SCHEME)."://".parse_url($start_url, PHP_URL_HOST)."/".parse_url($start_url, PHP_URL_PATH)."/".$fnew_url;
+$new_Arr[$key] = $new_url;
+}
 
+   if((parse_url($fnew_url, PHP_URL_HOST)!="")&&(parse_url($start_url, PHP_URL_HOST)!=parse_url($fnew_url, PHP_URL_HOST)))
+   #delete $fnew_url;
+    #delete it if the linkname of map is different from hostname.
+    unset( $new_Arr[$key]);
+}
+return $new_Arr;
+}
 
 # array $urls contenente link  delle pagine
     $arr_links = array( );
@@ -135,8 +166,16 @@ return $aptr;
     
 
 
-#url site from post form of file input.html
-$start_url =$_REQUEST['url'];
+
+
+# array $arr_links contenente link  delle pagine
+    $arr_links = array( );
+   $final_array=array();
+
+
+
+
+$start_url =$_REQUEST["site_http_or_https"];
 $newurl='';
 $scheme=parse_url($start_url, PHP_URL_SCHEME);
 $path=parse_url($start_url, PHP_URL_PATH);
@@ -144,34 +183,54 @@ $host=parse_url($start_url, PHP_URL_HOST);
 $query=parse_url($start_url, PHP_URL_QUERY);
 $ip = gethostbyname($host);
 
-if((filter_var($ip, FILTER_VALIDATE_IP)==true))
-{
-$arr_links=get_urls_from($start_url);
-//var_dump($arr_links);
-$str_finale="";$str_dump="";//Variable string of output of function  dump_url
 
-foreach($arr_links as $link) {
+$arr_links=get_urls_from($start_url);
+$final_array=get_final_urls($arr_links);
+//var_dump($arr_links);
+$str_finale="";//Variable string of output of function  dump_url
+$str_dump='';
+foreach($final_array as $link) {
 
    
-$str_dump.=urlElement($link);  
+$str_dump.= urlElement($link);  
 
 }
 
 
 
-$str_finale= '<?xml version="1.0" encoding="UTF-8"?>'.PHP_EOL; 
- $str_finale= $str_finale.'<urlset>'.PHP_EOL ; 
-$str_dump=$str_finale.$str_dump;
-$str_dump =$str_dump.'</urlset>';echo $str_dump ;
+
+
+//$fp=file_put_contents("sitemap.xml",$str_dump);
+$str_finale= '<?xml version="1.0" encoding="UTF-8"?>'.PHP_EOL;
+$str_finale.= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'.PHP_EOL ;  
+$str_finale.= $str_dump;
+$str_finale.='</urlset>';
 #put html content into $url file xml from folder 
+$name_file=str_shuffle('0123456789');
+//echo "<h1>your sitemap file .xml:".$name_file.".xml"."</h1>";
+$fp=file_put_contents($name_file.".xml",$str_finale);
 
-$fp=file_put_contents("sitemap.xml",$str_dump);
-}
 
-header("Content-type: application/octet-stream");
-    header('Content-Disposition: attachment; filename="' . basename($start_url) . '"');
-    header('Content-Length: ' . filesize($start_url));
-    readfile($start_url);
+header('Content-Description: File Transfer');
+header('Content-Type: application/octet-stream');
+header("Content-Disposition: attachment; filename=".$name_file.".xml");
+header('Content-Transfer-Encoding: binary');
+header('Expires: 0');
+header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+header('Pragma: public');
+header('Content-Length: '. filesize($name_file.".xml")."'" ); //Absolute URL //
+ob_clean();
+flush();
+
+readfile($name_file.".xml"); //Absolute URL
+//exit();
+
+
+
+?>
+
+
+
 
 
 
